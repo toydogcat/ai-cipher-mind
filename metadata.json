@@ -1,0 +1,6 @@
+{
+  "name": "Cipher Mind: 1A2B Master",
+  "description": "A sophisticated Bulls and Cows (1A2B) logic game with adjustable parameters (0-30 range, multiple positions) and a built-in AI solver to help you crack any code.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

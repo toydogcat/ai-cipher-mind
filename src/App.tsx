@@ -768,6 +768,22 @@ export default function App() {
             <span>{t('target')}: {settings.positions}P_{settings.maxVal}R</span>
           </div>
         </div>
+
+        {/* Vercount Stats */}
+        <div className="flex items-center gap-4 text-[9px] font-mono text-slate-500 tracking-wider">
+          <span id="busuanzi_container_site_pv" className="flex items-center gap-1">
+            <span className="text-indigo-400/60">👁️</span> 
+            <span className="uppercase text-slate-600">{lang === 'zh' ? '總瀏覽' : 'Views'}:</span>
+            <span id="busuanzi_value_site_pv" className="text-indigo-400 font-bold">...</span>
+          </span>
+          <span className="w-px h-2.5 bg-slate-800" />
+          <span id="busuanzi_container_site_uv" className="flex items-center gap-1">
+            <span className="text-emerald-400/60">👤</span> 
+            <span className="uppercase text-slate-600">{lang === 'zh' ? '訪客數' : 'Visitors'}:</span>
+            <span id="busuanzi_value_site_uv" className="text-emerald-400 font-bold">...</span>
+          </span>
+        </div>
+
         <div className="text-[10px] text-slate-700 italic font-medium">{t('stableBuild')}</div>
       </footer>
 

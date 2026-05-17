@@ -87,35 +87,6 @@ Our solver merges the spirit of **Donald Knuth's Mastermind strategy** with **Sh
 4. **Real-time Performance Guard**:
    Dual random-shuffled sampling pools evaluate candidates (evaluating up to 150 candidates and 150 outside possibilities) to keep calculations under **10ms**, ensuring a zero-lag UI thread.
 
----
 
-## 🛠️ 開發與部署 (Local Development & CI/CD)
 
-### 1. 本地啟動 (Local Run)
-確保您已安裝 Node.js (v18+)，然後在終端機中執行：
-```bash
-# 安裝依賴項目 (Install dependencies)
-npm install
 
-# 啟動開發伺服器 (Run development server)
-npm run dev
-```
-
-### 2. 生產端編譯 (Production Build)
-確認編譯無誤：
-```bash
-npm run build
-```
-
-### 3. GitHub Actions 自動化部署 (CI/CD Workflows)
-本專案已完美整合 GitHub Actions。所有部署設定檔案皆儲存於 [`.github/workflows/deploy.yml`](file:///.github/workflows/deploy.yml)。
-當有新的提交推送到 `main` 分支時，GitHub Actions 會自動執行：
-1. Checkout 原始碼。
-2. 設定 Node.js 環境並啟用快取以加速安裝。
-3. 安裝專案依賴。
-4. 編譯出生產端 Vite 靜態資源。
-5. 安全上傳並將其部署至 **GitHub Pages** 服務（伺服路徑已綁定為 `/ai-cipher-mind/`）。
-
----
-
-Developed with 💜 by Antigravity AI & pairs.

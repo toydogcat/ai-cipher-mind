@@ -212,6 +212,7 @@ export default function App() {
 
   // Solver specific
   const [candidates, setCandidates] = useState<number[][]>([]);
+  const [allPossibleCodes, setAllPossibleCodes] = useState<number[][]>([]);
   const [isSolverReady, setIsSolverReady] = useState(false);
   const [solverError, setSolverError] = useState<string | null>(null);
 
@@ -245,10 +246,12 @@ export default function App() {
       setHistory([]);
       setCurrentGuess(new Array(settings.positions).fill(0));
       setIsGameOver(false);
+      setAllPossibleCodes([]);
     } else if (mode === 'solver') {
       try {
         const c = generateAllCandidates(settings);
         setCandidates(c);
+        setAllPossibleCodes(c);
         setHistory([]);
         setSolverError(null);
         setIsSolverReady(true);
@@ -256,6 +259,7 @@ export default function App() {
       } catch (e: any) {
         setSolverError(e.message);
         setIsSolverReady(false);
+        setAllPossibleCodes([]);
       }
     }
   }, [mode, gameId, settings]);
@@ -286,8 +290,8 @@ export default function App() {
 
   const solverSuggestion = useMemo(() => {
     if (mode !== 'solver' || candidates.length === 0) return null;
-    return getOptimalGuess(candidates); // Use our Shannon Entropy resolution engine
-  }, [candidates, mode]);
+    return getOptimalGuess(candidates, allPossibleCodes); // Use our Knuth-inspired Mastermind resolution engine
+  }, [candidates, allPossibleCodes, mode]);
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100 font-sans overflow-hidden">

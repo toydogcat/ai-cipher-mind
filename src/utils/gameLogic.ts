@@ -138,53 +138,80 @@ export function generateAllCandidates(settings: GameSettings): number[][] {
 
 /**
  * Finds the mathematically optimal next guess using Shannon Entropy (Information Gain).
- * For each evaluated guess, it computes the probability distribution of feedback outcomes (A, B)
- * across the remaining candidates, and selects the guess that maximizes expected entropy.
+ * * [Optimized Version]: Now evaluates both valid candidates AND a sample of outside combinations 
+ * (if allPossibleCodes is provided) to find "sacrificial guesses" that eliminate the most wrong answers.
  */
-export function getOptimalGuess(candidates: number[][]): number[] {
+export function getOptimalGuess(
+  candidates: number[][],
+  allPossibleCodes?: number[][] // 新增：可傳入遊戲初始生成的所有可能組合
+): number[] {
   if (!candidates || candidates.length === 0) return [];
-  if (candidates.length <= 2) return candidates[0];
+  if (candidates.length <= 2) return candidates[0]; // 只剩1~2個時直接猜，不浪費算力
 
   let bestGuess = candidates[0];
   let maxEntropy = -1;
 
-  // Optimizing performance: limit sample size of guesses evaluated to keep computations under ~10ms.
-  // Shannon Entropy will run over all remaining candidates to ensure correct weight.
-  const maxEvalCandidates = Math.min(candidates.length, 150);
-  const evalList = [...candidates];
+  // 1. 準備評估池 (Evaluation Pool)
+  // 限制計算量，確保前端 UI 在 TypeScript/Vite 環境中不會掉幀或卡死
+  const maxEvalCandidates = 150; 
+  const maxEvalOutside = 150; 
+  const evalList: number[][] = [];
 
-  // Quick Durstenfeld shuffle to get a random subset if we have more candidates than maxEvalCandidates
+  // 加入剩餘的「合法候選者」
   if (candidates.length > maxEvalCandidates) {
-    for (let i = evalList.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      const temp = evalList[i];
-      evalList[i] = evalList[j];
-      evalList[j] = temp;
+    // 快速洗牌抽樣
+    const shuffled = [...candidates].sort(() => 0.5 - Math.random());
+    evalList.push(...shuffled.slice(0, maxEvalCandidates));
+  } else {
+    evalList.push(...candidates);
+  }
+
+  // 加入「全域空間」的其他組合來尋找破局點 (Information Gain 最大化)
+  if (allPossibleCodes && allPossibleCodes.length > candidates.length) {
+    const shuffledAll = [...allPossibleCodes].sort(() => 0.5 - Math.random());
+    let added = 0;
+    for (const code of shuffledAll) {
+      if (added >= maxEvalOutside) break;
+      evalList.push(code);
+      added++;
     }
   }
 
-  const sampleGuesses = evalList.slice(0, maxEvalCandidates);
+  const total = candidates.length;
 
-  for (const guess of sampleGuesses) {
+  // 2. 評估期望熵值
+  for (const guess of evalList) {
     const feedbackCounts = new Map<string, number>();
 
-    // Calculate feedback distribution against all candidates in the remaining pool
+    // 將這個 guess 拿去跟所有「剩餘可能的 secret」做比對，看會產生哪些回饋分佈
     for (const secret of candidates) {
-      const fb = getFeedback(guess, secret);
+      const fb = getFeedback(guess, secret); // 共用現有的 getFeedback
       const key = `${fb.a}_${fb.b}`;
       feedbackCounts.set(key, (feedbackCounts.get(key) || 0) + 1);
     }
 
-    // Compute expected entropy: H(X) = -sum( p(x) * log2(p(x)) )
+    // 計算夏農熵: H(X) = -sum( p(x) * log2(p(x)) )
     let entropy = 0;
-    const total = candidates.length;
     for (const count of feedbackCounts.values()) {
       const p = count / total;
       entropy -= p * Math.log2(p);
     }
 
-    if (entropy > maxEntropy) {
-      maxEntropy = entropy;
+    // 3. 權重微調 (Tie-breaker)
+    // 如果一個「必錯的猜測」跟一個「有可能中的猜測」帶來的情報量一樣大，
+    // 我們稍微偏袒後者，因為它有微小機率能直接贏得遊戲。
+    let isCandidate = false;
+    for (const c of candidates) {
+      if (c.every((val, idx) => val === guess[idx])) {
+        isCandidate = true;
+        break;
+      }
+    }
+    const entropyWeight = isCandidate ? entropy + 0.05 : entropy;
+
+    // 更新最佳解
+    if (entropyWeight > maxEntropy) {
+      maxEntropy = entropyWeight;
       bestGuess = guess;
     }
   }

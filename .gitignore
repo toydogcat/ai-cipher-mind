@@ -7,3 +7,5 @@ coverage/
 .env*
 !.env.example
 cipher-mind_-1a2b-master.zip
+
+TMP/

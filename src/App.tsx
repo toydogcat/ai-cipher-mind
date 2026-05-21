@@ -204,6 +204,9 @@ export default function App() {
     allowDuplicates: false
   });
 
+  // 1. 宣告暫存設定狀態，用於解耦「正在編輯」與「已部署」的設定
+  const [tempSettings, setTempSettings] = useState<GameSettings>({ ...settings });
+
   const [gameId, setGameId] = useState(0); // For resetting games
   const [secret, setSecret] = useState<number[]>([]);
   const [history, setHistory] = useState<GuessRecord[]>([]);
@@ -228,23 +231,39 @@ export default function App() {
     return text;
   };
 
-  const hasSettingsWarning = !settings.allowDuplicates && settings.maxVal < settings.positions - 1;
+  // 當切換回設定模式時，同步當前啟用的 settings 到暫存
+  useEffect(() => {
+    if (mode === 'settings') {
+      setTempSettings({ ...settings });
+    }
+  }, [mode, settings]);
+
+  const hasSettingsWarning = !tempSettings.allowDuplicates && tempSettings.maxVal < tempSettings.positions - 1;
 
   const handleDeploySettings = () => {
-    let finalMaxVal = settings.maxVal;
-    if (!settings.allowDuplicates && settings.maxVal < settings.positions - 1) {
-      finalMaxVal = settings.positions - 1;
-      setSettings(prev => ({ ...prev, maxVal: finalMaxVal }));
+    let finalMaxVal = tempSettings.maxVal;
+    if (!tempSettings.allowDuplicates && tempSettings.maxVal < tempSettings.positions - 1) {
+      finalMaxVal = tempSettings.positions - 1;
     }
+    setSettings({
+      positions: tempSettings.positions,
+      maxVal: finalMaxVal,
+      allowDuplicates: tempSettings.allowDuplicates
+    });
     setMode('menu');
   };
 
   useEffect(() => {
+    // 優化：動態生成無衝突的初始數值序列，防止禁用按鈕困擾
+    const initialGuess = settings.allowDuplicates 
+      ? new Array(settings.positions).fill(0)
+      : Array.from({ length: settings.positions }, (_, i) => i % (settings.maxVal + 1));
+
     if (mode === 'classic') {
       const s = generateSecret(settings);
       setSecret(s);
       setHistory([]);
-      setCurrentGuess(new Array(settings.positions).fill(0));
+      setCurrentGuess(initialGuess);
       setIsGameOver(false);
       setAllPossibleCodes([]);
     } else if (mode === 'solver') {
@@ -255,7 +274,7 @@ export default function App() {
         setHistory([]);
         setSolverError(null);
         setIsSolverReady(true);
-        setCurrentGuess(new Array(settings.positions).fill(0));
+        setCurrentGuess(initialGuess);
       } catch (e: any) {
         setSolverError(e.message);
         setIsSolverReady(false);
@@ -272,9 +291,6 @@ export default function App() {
       if (feedback.a === settings.positions) {
         setIsGameOver(true);
       }
-    } else if (mode === 'solver') {
-      // For solver, currentGuess is what the AI suggests or user inputs
-      // Then user provides feedback. This is handled separately.
     }
   };
 
@@ -285,6 +301,16 @@ export default function App() {
     const newCandidates = filterCandidates(candidates, [newRecord]);
     
     setHistory(newHistory);
+    setCandidates(newCandidates);
+  };
+
+  const handleDeleteHistoryItem = (indexToDelete: number) => {
+    // 過濾掉被刪除的那一步
+    const newHistory = history.filter((_, idx) => idx !== indexToDelete);
+    setHistory(newHistory);
+    
+    // 重新過濾剩餘可能候選池
+    const newCandidates = filterCandidates(allPossibleCodes, newHistory);
     setCandidates(newCandidates);
   };
 
@@ -408,8 +434,8 @@ export default function App() {
                     {[2, 3, 4, 5, 6].map(num => (
                       <button 
                         key={num}
-                        onClick={() => setSettings({ ...settings, positions: num })}
-                        className={`flex-1 py-3 rounded-lg border font-mono font-bold transition-all cursor-pointer ${settings.positions === num ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-600'}`}
+                        onClick={() => setTempSettings({ ...tempSettings, positions: num })}
+                        className={`flex-1 py-3 rounded-lg border font-mono font-bold transition-all cursor-pointer ${tempSettings.positions === num ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-600'}`}
                       >
                         {num}
                       </button>
@@ -423,8 +449,8 @@ export default function App() {
                     <p className="text-[10px] text-slate-600 font-mono mt-1">SYSTEM_LIMIT: 100</p>
                   </div>
                   <NumberInput 
-                    value={settings.maxVal} 
-                    onChange={(val) => setSettings({ ...settings, maxVal: val })} 
+                    value={tempSettings.maxVal} 
+                    onChange={(val) => setTempSettings({ ...tempSettings, maxVal: val })} 
                     max={100} 
                   />
                 </div>
@@ -435,10 +461,10 @@ export default function App() {
                     <p className="text-[10px] text-slate-600 font-mono mt-1">DUPE_COLLISION_LOGIC</p>
                   </div>
                   <button 
-                    onClick={() => setSettings({ ...settings, allowDuplicates: !settings.allowDuplicates })}
-                    className={`w-12 h-6 rounded-full relative transition-colors cursor-pointer ${settings.allowDuplicates ? 'bg-indigo-600' : 'bg-slate-800'}`}
+                    onClick={() => setTempSettings({ ...tempSettings, allowDuplicates: !tempSettings.allowDuplicates })}
+                    className={`w-12 h-6 rounded-full relative transition-colors cursor-pointer ${tempSettings.allowDuplicates ? 'bg-indigo-600' : 'bg-slate-800'}`}
                   >
-                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all shadow-sm ${settings.allowDuplicates ? 'left-7' : 'left-1'}`} />
+                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all shadow-sm ${tempSettings.allowDuplicates ? 'left-7' : 'left-1'}`} />
                   </button>
                 </div>
 
@@ -725,26 +751,42 @@ export default function App() {
                         <span className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">{t('awaitingInput')}</span>
                       </div>
                     ) : (
-                      history.slice().reverse().map((record, i) => (
-                        <motion.div 
-                          initial={{ x: 20, opacity: 0 }} 
-                          animate={{ x: 0, opacity: 1 }}
-                          key={i} 
-                          className="flex items-center justify-between p-4 bg-slate-900/40 border border-slate-800 rounded-xl group hover:border-indigo-500/30 hover:bg-slate-900 transition-all shadow-sm"
-                        >
-                          <div className="flex flex-col gap-2">
-                            <span className="text-[9px] font-black text-slate-600 mono uppercase tracking-widest">{t('cycle', { count: history.length - i })}</span>
-                            <div className="flex gap-2">
-                              {record.guess.map((n, idx) => (
-                                <span key={idx} className="px-2 py-1 bg-slate-950 border border-slate-800 rounded font-mono font-bold text-indigo-400 text-sm shadow-inner min-w-[32px] text-center">
-                                  {n}
-                                </span>
-                              ))}
+                      history.slice().reverse().map((record, i) => {
+                        const originalIndex = history.length - 1 - i;
+                        return (
+                          <motion.div 
+                            initial={{ x: 20, opacity: 0 }} 
+                            animate={{ x: 0, opacity: 1 }}
+                            key={originalIndex} 
+                            className="flex items-center justify-between p-4 bg-slate-900/40 border border-slate-800 rounded-xl group hover:border-indigo-500/30 hover:bg-slate-900 transition-all shadow-sm"
+                          >
+                            <div className="flex flex-col gap-2">
+                              <span className="text-[9px] font-black text-slate-600 mono uppercase tracking-widest">{t('cycle', { count: originalIndex + 1 })}</span>
+                              <div className="flex gap-2">
+                                {record.guess.map((n, idx) => (
+                                  <span key={idx} className="px-2 py-1 bg-slate-950 border border-slate-800 rounded font-mono font-bold text-indigo-400 text-sm shadow-inner min-w-[32px] text-center">
+                                    {n}
+                                  </span>
+                                ))}
+                              </div>
                             </div>
-                          </div>
-                          <FeedbackBadge feedback={record.feedback} />
-                        </motion.div>
-                      ))
+                            
+                            <div className="flex items-center gap-3">
+                              <FeedbackBadge feedback={record.feedback} />
+                              {/* 新增刪除按鈕，僅在 Solver 模式下啟用 */}
+                              {mode === 'solver' && (
+                                <button 
+                                  onClick={() => handleDeleteHistoryItem(originalIndex)}
+                                  className="text-slate-600 hover:text-red-400 p-1.5 rounded-lg hover:bg-slate-800 transition-colors opacity-0 group-hover:opacity-100 cursor-pointer"
+                                  title="刪除此步驟"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              )}
+                            </div>
+                          </motion.div>
+                        );
+                      })
                     )}
                   </div>
                 </div>

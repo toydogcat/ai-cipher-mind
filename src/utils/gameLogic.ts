@@ -137,6 +137,24 @@ export function generateAllCandidates(settings: GameSettings): number[][] {
 }
 
 /**
+ * 高效隨機抽樣，時間複雜度為 O(K)，適用於超大型陣列抽樣
+ */
+function getRandomSample<T>(arr: T[], sampleSize: number): T[] {
+  if (arr.length <= sampleSize) return [...arr];
+  const sample: T[] = [];
+  const usedIndices = new Set<number>();
+  
+  while (sample.length < sampleSize) {
+    const idx = Math.floor(Math.random() * arr.length);
+    if (!usedIndices.has(idx)) {
+      usedIndices.add(idx);
+      sample.push(arr[idx]);
+    }
+  }
+  return sample;
+}
+
+/**
  * Finds the mathematically optimal next guess using Shannon Entropy (Information Gain).
  * * [Optimized Version]: Now evaluates both valid candidates AND a sample of outside combinations 
  * (if allPossibleCodes is provided) to find "sacrificial guesses" that eliminate the most wrong answers.
@@ -151,7 +169,10 @@ export function getOptimalGuess(
   let bestGuess = candidates[0];
   let maxEntropy = -1;
 
-  // 1. 準備評估池 (Evaluation Pool)
+  // 1. 建立候選池的常數時間搜尋集合 (O(1) Lookup Set)
+  const candidateSet = new Set(candidates.map(c => c.join(',')));
+
+  // 2. 準備評估池 (Evaluation Pool)
   // 限制計算量，確保前端 UI 在 TypeScript/Vite 環境中不會掉幀或卡死
   const maxEvalCandidates = 150; 
   const maxEvalOutside = 150; 
@@ -159,27 +180,21 @@ export function getOptimalGuess(
 
   // 加入剩餘的「合法候選者」
   if (candidates.length > maxEvalCandidates) {
-    // 快速洗牌抽樣
-    const shuffled = [...candidates].sort(() => 0.5 - Math.random());
-    evalList.push(...shuffled.slice(0, maxEvalCandidates));
+    // 替換：秒級變毫秒級！
+    evalList.push(...getRandomSample(candidates, maxEvalCandidates));
   } else {
     evalList.push(...candidates);
   }
 
   // 加入「全域空間」的其他組合來尋找破局點 (Information Gain 最大化)
   if (allPossibleCodes && allPossibleCodes.length > candidates.length) {
-    const shuffledAll = [...allPossibleCodes].sort(() => 0.5 - Math.random());
-    let added = 0;
-    for (const code of shuffledAll) {
-      if (added >= maxEvalOutside) break;
-      evalList.push(code);
-      added++;
-    }
+    // 替換：秒級變毫秒級！
+    evalList.push(...getRandomSample(allPossibleCodes, maxEvalOutside));
   }
 
   const total = candidates.length;
 
-  // 2. 評估期望熵值
+  // 3. 評估期望熵值
   for (const guess of evalList) {
     const feedbackCounts = new Map<string, number>();
 
@@ -197,16 +212,8 @@ export function getOptimalGuess(
       entropy -= p * Math.log2(p);
     }
 
-    // 3. 權重微調 (Tie-breaker)
-    // 如果一個「必錯的猜測」跟一個「有可能中的猜測」帶來的情報量一樣大，
-    // 我們稍微偏袒後者，因為它有微小機率能直接贏得遊戲。
-    let isCandidate = false;
-    for (const c of candidates) {
-      if (c.every((val, idx) => val === guess[idx])) {
-        isCandidate = true;
-        break;
-      }
-    }
+    // 4. 權重微調 (Tie-breaker) - 優化為常數時間複雜度 O(1)
+    const isCandidate = candidateSet.has(guess.join(','));
     const entropyWeight = isCandidate ? entropy + 0.05 : entropy;
 
     // 更新最佳解
